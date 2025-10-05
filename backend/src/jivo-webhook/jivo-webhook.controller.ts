@@ -14,7 +14,11 @@ export class JivoWebhookController {
     @Headers() headers: Record<string, string | string[] | undefined>,
   ) {
     const secret = this.extractSecret(req, headers, body);
-    await this.jivoWebhookService.handleWebhook(secret, body, headers);
+    await this.jivoWebhookService.handleWebhook(
+      secret,
+      body,
+      headers as Record<string, string | string[]>,
+    );
     return { status: 'accepted' };
   }
 
