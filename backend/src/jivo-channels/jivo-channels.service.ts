@@ -9,13 +9,13 @@ import { UpdateJivoChannelDto } from './dto/update-jivo-channel.dto';
 export class JivoChannelsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateJivoChannelDto) {
+  async create(dto: CreateJivoChannelDto & { tenantId: string }) {
     const channel = await this.prisma.jivoChannel.create({
       data: {
         name: dto.name,
         outboundUrl: dto.outboundUrl,
         inboundSecret: dto.inboundSecret,
-        tenantId: dto.tenantId ?? null,
+        tenantId: dto.tenantId,
         status: dto.status,
       },
     });

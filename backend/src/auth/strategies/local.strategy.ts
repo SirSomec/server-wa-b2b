@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
+import type { Request } from 'express';
 import { Strategy } from 'passport-local';
 
 import { AuthService } from '../auth.service';
@@ -11,7 +12,7 @@ export class LocalStrategy extends PassportStrategy(Strategy, 'local') {
     super({ usernameField: 'email', passReqToCallback: true });
   }
 
-  validate(req: Express.Request, email: string, password: string) {
+  validate(req: Request, email: string, password: string) {
     const loginDto: LoginDto = {
       email,
       password,

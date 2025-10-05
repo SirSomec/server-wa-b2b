@@ -9,14 +9,14 @@ import { UpdateWhatsappAccountDto } from './dto/update-whatsapp-account.dto';
 export class WhatsappAccountsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateWhatsappAccountDto) {
+  async create(dto: CreateWhatsappAccountDto & { tenantId: string }) {
     const account = await this.prisma.whatsappAccount.create({
       data: {
         alias: dto.alias,
         phoneNumber: dto.phoneNumber,
         status: dto.status,
         sessionMode: dto.sessionMode,
-        tenantId: dto.tenantId ?? null,
+        tenantId: dto.tenantId,
       },
     });
 
