@@ -1,10 +1,10 @@
-CREATE TYPE "WebhookEventStatus" AS ENUM (''PENDING'', ''PROCESSED'', ''FAILED'');
+CREATE TYPE "WebhookEventStatus" AS ENUM ('PENDING', 'PROCESSED', 'FAILED');
 
 CREATE TABLE "JivoWebhookEvent" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "tenant_id" UUID NOT NULL,
     "jivo_channel_id" UUID NOT NULL,
-    "status" "WebhookEventStatus" NOT NULL DEFAULT ''PENDING'',
+    "status" "WebhookEventStatus" NOT NULL DEFAULT 'PENDING',
     "payload" JSONB NOT NULL,
     "headers" JSONB NOT NULL,
     "error" TEXT,
@@ -19,3 +19,5 @@ CREATE INDEX "JivoWebhookEvent_status_created_idx" ON "JivoWebhookEvent"("status
 ALTER TABLE "JivoWebhookEvent"
   ADD CONSTRAINT "JivoWebhookEvent_tenant_id_fkey" FOREIGN KEY ("tenant_id") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT "JivoWebhookEvent_jivo_channel_id_fkey" FOREIGN KEY ("jivo_channel_id") REFERENCES "JivoChannel"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+
