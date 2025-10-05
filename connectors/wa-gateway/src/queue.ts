@@ -30,7 +30,7 @@ export class QueueClient {
       this.channel = null;
     });
 
-    this.connection.on('error', (error) => {
+    this.connection.on('error', (error: unknown) => {
       logger.error({ error }, 'AMQP connection error');
     });
   }
@@ -42,7 +42,7 @@ export class QueueClient {
 
     await this.channel.consume(
       config.queueName,
-      async (msg) => {
+      async (msg: ConsumeMessage | null) => {
         if (!msg) {
           return;
         }
