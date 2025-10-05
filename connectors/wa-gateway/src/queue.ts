@@ -1,48 +1,56 @@
 import { assertQueueEnvelope, QueueEnvelope } from '@server-wa-b2b/contracts';
-import amqp, { Channel, Connection, ConsumeMessage } from 'amqplib';
+import amqp from 'amqplib';
 
 import { config } from './config';
 import { logger } from './logger';
 
+type AmqpConnection = Awaited<ReturnType<typeof amqp.connect>>;
+type AmqpChannel = Awaited<ReturnType<AmqpConnection['createChannel']>>;
+
 type MessageHandler = (
   envelope: QueueEnvelope,
-  raw: ConsumeMessage,
-  channel: Channel,
+  raw: AmqpChannel extends { consume: infer T }
+    ? Parameters<NonNullable<T>>[1] extends (msg: infer M, ...args: any[]) => any
+      ? NonNullable<M>
+      : never
+    : never,
+  channel: AmqpChannel,
 ) => Promise<void>;
 
 export class QueueClient {
-  private connection: Connection | null = null;
-  private channel: Channel | null = null;
+  private connection: AmqpConnection | null = null;
+  private channel: AmqpChannel | null = null;
 
   async connect(): Promise<void> {
     if (this.connection) {
       return;
     }
 
-    this.connection = await amqp.connect(config.amqpUrl);
-    this.channel = await this.connection.createChannel();
-    await this.channel.assertQueue(config.queueName, { durable: true });
-    this.channel.prefetch(config.prefetch);
+    const connection = await amqp.connect(config.amqpUrl);
+    this.connection = connection;
 
-    this.connection.on('close', () => {
+    const channel = await connection.createChannel();
+    await channel.assertQueue(config.queueName, { durable: true });
+    channel.prefetch(config.prefetch);
+    this.channel = channel;
+
+    connection.on('close', () => {
       logger.warn('AMQP connection closed');
       this.connection = null;
       this.channel = null;
     });
 
-    this.connection.on('error', (error: unknown) => {
+    connection.on('error', (error: unknown) => {
       logger.error({ error }, 'AMQP connection error');
     });
   }
 
   async consume(handler: MessageHandler): Promise<void> {
-    if (!this.channel) {
-      throw new Error('Queue client not connected');
-    }
+    const channel = await this.ensureChannel();
 
-    await this.channel.consume(
+    await channel.consume(
       config.queueName,
-      async (msg: ConsumeMessage | null) => {
+      async (msg) => {
         if (!msg) {
           return;
         }
@@ -50,11 +58,11 @@ export class QueueClient {
         try {
           const data = JSON.parse(msg.content.toString());
           const envelope = assertQueueEnvelope(data);
-          await handler(envelope, msg, this.channel!);
-          this.channel!.ack(msg);
+          await handler(envelope, msg, channel);
+          channel.ack(msg);
         } catch (error) {
           logger.error({ error }, 'Failed to process queue message');
-          this.channel!.nack(msg, false, false);
+          channel.nack(msg, false, false);
         }
       },
       { noAck: false },
@@ -62,11 +70,9 @@ export class QueueClient {
   }
 
   async publish(envelope: QueueEnvelope): Promise<void> {
-    if (!this.channel) {
-      throw new Error('Queue client not connected');
-    }
+    const channel = await this.ensureChannel();
 
-    this.channel.sendToQueue(config.queueName, Buffer.from(JSON.stringify(envelope)), {
+    channel.sendToQueue(config.queueName, Buffer.from(JSON.stringify(envelope)), {
       persistent: true,
     });
   }
@@ -76,5 +82,21 @@ export class QueueClient {
     await this.connection?.close();
     this.channel = null;
     this.connection = null;
+  }
+
+  private async ensureChannel(): Promise<AmqpChannel> {
+    if (this.channel) {
+      return this.channel;
+    }
+
+    if (!this.connection) {
+      await this.connect();
+    }
+
+    if (!this.channel || !this.connection) {
+      throw new Error('Failed to establish AMQP channel');
+    }
+
+    return this.channel;
   }
 }
