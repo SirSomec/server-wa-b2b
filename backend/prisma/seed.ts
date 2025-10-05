@@ -5,6 +5,34 @@ const prisma = new PrismaClient();
 const SALT_ROUNDS = 12;
 
 async function upsertRole(code: string, name: string, scopes: string[], tenantId: string | null) {
+  if (tenantId === null) {
+    const existing = await prisma.role.findFirst({
+      where: {
+        tenantId: null,
+        code,
+      },
+    });
+
+    if (existing) {
+      return prisma.role.update({
+        where: { id: existing.id },
+        data: {
+          name,
+          scopes,
+        },
+      });
+    }
+
+    return prisma.role.create({
+      data: {
+        tenantId: null,
+        code,
+        name,
+        scopes,
+      },
+    });
+  }
+
   return prisma.role.upsert({
     where: {
       tenantId_code: {
@@ -40,15 +68,15 @@ async function assignRole(userId: string, roleId: string) {
 async function main() {
   const platformAdminRole = await upsertRole(
     'platform-admin',
-    '������������� �������������',
+    'Platform Administrator',
     ['platform:*'],
     null,
   );
 
-  await upsertRole('tenant-admin-template', '������ tenant admin', ['tenant:*'], null);
+  await upsertRole('tenant-admin-template', 'Tenant Admin Template', ['tenant:*'], null);
   await upsertRole(
     'tenant-operator-template',
-    '������ tenant operator',
+    'Tenant Operator Template',
     ['tenant:messages:read'],
     null,
   );
