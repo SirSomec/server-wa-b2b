@@ -29,3 +29,4 @@ COPY --from=builder /app/backend/package.json ./package.json
 
 EXPOSE 3000
 CMD ["node", "dist/main.js"]
+

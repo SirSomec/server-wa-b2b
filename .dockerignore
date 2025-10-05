@@ -1,0 +1,13 @@
+.git
+.gitignore
+**/.git
+**/.cache
+**/node_modules
+**/dist
+frontend/.next
+backend/.next
+**/*.log
+**/*.tmp
+coverage
+.DS_Store
+Thumbs.db

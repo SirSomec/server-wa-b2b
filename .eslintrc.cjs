@@ -27,5 +27,6 @@ module.exports = {
     ],
     '@typescript-eslint/no-explicit-any': 'warn'
   },
-  ignorePatterns: ['dist', 'coverage', '**/*.js']
+  ignorePatterns: ['dist', 'coverage', '**/*.js', '**/*.d.ts']
 };
+
