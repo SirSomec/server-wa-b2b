@@ -10,11 +10,7 @@ type AmqpChannel = Awaited<ReturnType<AmqpConnection['createChannel']>>;
 
 type MessageHandler = (
   envelope: QueueEnvelope,
-  raw: AmqpChannel extends { consume: infer T }
-    ? Parameters<NonNullable<T>>[1] extends (msg: infer M, ...args: any[]) => any
-      ? NonNullable<M>
-      : never
-    : never,
+  raw: ConsumeMessage,
   channel: AmqpChannel,
 ) => Promise<void>;
 
