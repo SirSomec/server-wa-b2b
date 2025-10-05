@@ -11,7 +11,7 @@ export class JivoWebhookController {
   async handleWebhook(
     @Req() req: Request,
     @Body() body: unknown,
-    @Headers() headers: Record<string, string | string[]>,
+    @Headers() headers: Record<string, string | string[] | undefined>,
   ) {
     const secret = this.extractSecret(req, headers, body);
     await this.jivoWebhookService.handleWebhook(secret, body, headers);
@@ -20,7 +20,7 @@ export class JivoWebhookController {
 
   private extractSecret(
     req: Request,
-    headers: Record<string, string | string[]>,
+    headers: Record<string, string | string[] | undefined>,
     body: unknown,
   ): string | undefined {
     const headerSecret = this.getHeader(headers, [
@@ -53,7 +53,7 @@ export class JivoWebhookController {
   }
 
   private getHeader(
-    headers: Record<string, string | string[]>,
+    headers: Record<string, string | string[] | undefined>,
     keys: string[],
   ): string | undefined {
     for (const key of keys) {
@@ -61,10 +61,18 @@ export class JivoWebhookController {
       if (!value) {
         continue;
       }
+
       if (Array.isArray(value)) {
-        return value[0];
+        const first = value.find((item): item is string => typeof item === 'string');
+        if (first) {
+          return first;
+        }
+        continue;
       }
-      return value;
+
+      if (typeof value === 'string') {
+        return value;
+      }
     }
 
     return undefined;
@@ -76,9 +84,15 @@ export class JivoWebhookController {
       if (!value) {
         continue;
       }
+
       if (Array.isArray(value)) {
-        return value[0];
+        const first = value.find((item): item is string => typeof item === 'string');
+        if (first) {
+          return first;
+        }
+        continue;
       }
+
       if (typeof value === 'string') {
         return value;
       }

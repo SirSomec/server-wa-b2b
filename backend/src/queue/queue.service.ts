@@ -1,8 +1,10 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { QueueEnvelope } from '@server-wa-b2b/contracts';
-import type { Channel, Connection } from 'amqplib';
 import * as amqp from 'amqplib';
+
+type AmqpConnection = Awaited<ReturnType<typeof amqp.connect>>;
+type AmqpChannel = Awaited<ReturnType<AmqpConnection['createChannel']>>;
 
 @Injectable()
 export class QueueService implements OnModuleDestroy {
@@ -10,8 +12,8 @@ export class QueueService implements OnModuleDestroy {
   private readonly url: string;
   private readonly queueName: string;
 
-  private connection: Connection | null = null;
-  private channel: Channel | null = null;
+  private connection: AmqpConnection | null = null;
+  private channel: AmqpChannel | null = null;
 
   constructor(private readonly configService: ConfigService) {
     this.url = this.configService.get<string>('queue.url') ?? '';
@@ -38,30 +40,40 @@ export class QueueService implements OnModuleDestroy {
     this.logger.debug({ eventId }, 'Received ACK from worker (not persisted yet)');
   }
 
-  private async ensureChannel(): Promise<Channel> {
+  private async ensureConnection(): Promise<AmqpConnection> {
+    if (this.connection) {
+      return this.connection;
+    }
+
     if (!this.url) {
       throw new Error('AMQP URL is not configured');
     }
 
+    const connection = await amqp.connect(this.url);
+    connection.on('close', () => {
+      this.logger.warn('AMQP connection closed');
+      this.connection = null;
+      this.channel = null;
+    });
+    connection.on('error', (error) => {
+      this.logger.error({ error }, 'AMQP connection error');
+    });
+
+    this.connection = connection;
+    return connection;
+  }
+
+  private async ensureChannel(): Promise<AmqpChannel> {
     if (this.channel) {
       return this.channel;
     }
 
-    if (!this.connection) {
-      this.connection = await amqp.connect(this.url);
-      this.connection.on('close', () => {
-        this.logger.warn('AMQP connection closed');
-        this.connection = null;
-        this.channel = null;
-      });
-      this.connection.on('error', (error) => {
-        this.logger.error({ error }, 'AMQP connection error');
-      });
-    }
+    const connection = await this.ensureConnection();
+    const channel = await connection.createChannel();
+    await channel.assertQueue(this.queueName, { durable: true });
 
-    this.channel = await this.connection.createChannel();
-    await this.channel.assertQueue(this.queueName, { durable: true });
-    return this.channel;
+    this.channel = channel;
+    return channel;
   }
 
   async onModuleDestroy(): Promise<void> {
