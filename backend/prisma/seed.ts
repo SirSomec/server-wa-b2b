@@ -65,6 +65,35 @@ async function assignRole(userId: string, roleId: string) {
   }
 }
 
+async function upsertPlatformUser(email: string, passwordHash: string, displayName: string) {
+  const existing = await prisma.user.findFirst({
+    where: {
+      tenantId: null,
+      email,
+    },
+  });
+
+  if (existing) {
+    return prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        passwordHash,
+        displayName,
+        isPlatformAdmin: true,
+      },
+    });
+  }
+
+  return prisma.user.create({
+    data: {
+      tenantId: null,
+      email,
+      displayName,
+      passwordHash,
+      isPlatformAdmin: true,
+    },
+  });
+}
 async function main() {
   const platformAdminRole = await upsertRole(
     'platform-admin',
@@ -86,26 +115,7 @@ async function main() {
 
   const passwordHash = await bcrypt.hash(adminPassword, SALT_ROUNDS);
 
-  const adminUser = await prisma.user.upsert({
-    where: {
-      tenantId_email: {
-        tenantId: null,
-        email: adminEmail,
-      },
-    },
-    update: {
-      passwordHash,
-      displayName: 'Platform Admin',
-      isPlatformAdmin: true,
-    },
-    create: {
-      tenantId: null,
-      email: adminEmail,
-      displayName: 'Platform Admin',
-      passwordHash,
-      isPlatformAdmin: true,
-    },
-  });
+  const adminUser = await upsertPlatformUser(adminEmail, passwordHash, 'Platform Admin');
 
   await assignRole(adminUser.id, platformAdminRole.id);
 }
