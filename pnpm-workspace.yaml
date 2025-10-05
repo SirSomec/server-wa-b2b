@@ -1,0 +1,7 @@
+packages:
+  - backend
+  - frontend
+  - connectors/*
+  - infrastructure
+  - docs
+  - packages/*

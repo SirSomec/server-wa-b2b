@@ -1,0 +1,377 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  directUrl         = env("DATABASE_DIRECT_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum ChannelStatus {
+  ACTIVE
+  PAUSED
+  ERROR
+}
+
+enum CredentialType {
+  WEBHOOK_SECRET
+  BASIC_AUTH
+  TOKEN
+}
+
+enum WhatsappStatus {
+  ONBOARDING
+  ACTIVE
+  PAUSED
+  ERROR
+}
+
+enum SessionMode {
+  HEADLESS
+  CLOUD
+}
+
+enum SessionState {
+  PENDING_QR
+  READY
+  EXPIRED
+}
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  CLOSED
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageSource {
+  JIVO
+  WHATSAPP
+  SYSTEM
+}
+
+enum MessagePayloadType {
+  TEXT
+  PHOTO
+  VIDEO
+  AUDIO
+  DOCUMENT
+  LOCATION
+  KEYBOARD
+  RATE
+  TYPING
+  START
+  STOP
+  SEEN
+}
+
+enum DeliveryChannel {
+  JIVO_OUTBOUND
+  JIVO_INBOUND
+  WA_OUTBOUND
+  WA_INBOUND
+}
+
+enum DeliveryStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum AuditEvent {
+  RECEIVED
+  ENQUEUED
+  DEQUEUED
+  TRANSFORMED
+  SENT
+  ACKNOWLEDGED
+  ERROR
+}
+
+enum WebhookEventStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+
+model Tenant {
+  id               String             @id @default(uuid()) @db.Uuid
+  name             String             @db.VarChar(255)
+  slug             String             @unique @db.VarChar(64)
+  status           TenantStatus       @default(ACTIVE)
+  maxWhatsappSlots Int                @map("max_whatsapp_slots")
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+
+  users            User[]
+  roles            Role[]
+  jivoChannels     JivoChannel[]
+  whatsappAccounts WhatsappAccount[]
+  conversations    Conversation[]
+  messages         Message[]
+  messageLogs      MessageAuditLog[]
+  deliveryAttempts DeliveryAttempt[]
+  weeklyMetrics    TenantWeeklyMetric[]
+  maintenanceRuns  MaintenanceRunLog[]
+  jivoWebhookEvents JivoWebhookEvent[]
+}
+
+model User {
+  id              String        @id @default(uuid()) @db.Uuid
+  tenantId        String?       @map("tenant_id") @db.Uuid
+  email           String?       @db.VarChar(255)
+  displayName     String        @map("display_name") @db.VarChar(255)
+  passwordHash    String        @map("password_hash") @db.VarChar(255)
+  isPlatformAdmin Boolean       @map("is_platform_admin") @default(false)
+  lastLoginAt     DateTime?     @map("last_login_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  tenant          Tenant?       @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  assignments     UserRoleAssignment[]
+
+  @@unique([tenantId, email], map: "users_tenant_email_key")
+}
+
+model Role {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String?  @map("tenant_id") @db.Uuid
+  code      String   @db.VarChar(64)
+  name      String   @db.VarChar(128)
+  scopes    Json     @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  users     UserRoleAssignment[]
+
+  @@unique([tenantId, code], map: "roles_tenant_code_key")
+}
+
+model UserRoleAssignment {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId], map: "user_role_unique")
+}
+
+model JivoChannel {
+  id            String            @id @default(uuid()) @db.Uuid
+  tenantId      String            @map("tenant_id") @db.Uuid
+  name          String            @db.VarChar(255)
+  outboundUrl   String            @map("outbound_url") @db.VarChar(2048)
+  inboundSecret String            @map("inbound_secret") @db.VarChar(128)
+  status        ChannelStatus     @default(ACTIVE)
+  metadata      Json?             @db.JsonB
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  credentials   ChannelCredential[]
+  conversations Conversation[]
+  webhookEvents JivoWebhookEvent[] @relation("JivoChannelWebhookEvents")
+}
+
+model ChannelCredential {
+  id        String          @id @default(uuid()) @db.Uuid
+  channelId String          @map("channel_id") @db.Uuid
+  type      CredentialType
+  value     Json            @db.JsonB
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  channel   JivoChannel     @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, type], map: "channel_credential_unique")
+}
+
+model WhatsappAccount {
+  id            String         @id @default(uuid()) @db.Uuid
+  tenantId      String         @map("tenant_id") @db.Uuid
+  alias         String         @db.VarChar(255)
+  phoneNumber   String         @map("phone_number") @db.VarChar(32)
+  status        WhatsappStatus @default(ONBOARDING)
+  sessionMode   SessionMode    @map("session_mode") @default(HEADLESS)
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessions      WaSession[]
+  conversations Conversation[]
+
+  @@unique([tenantId, phoneNumber], map: "tenant_phone_unique")
+}
+
+model WaSession {
+  id                String          @id @default(uuid()) @db.Uuid
+  whatsappAccountId String          @map("whatsapp_account_id") @db.Uuid
+  sessionState      SessionState    @map("session_state") @default(PENDING_QR)
+  sessionDataRef    String          @map("session_data_ref") @db.VarChar(512)
+  expiresAt         DateTime?       @map("expires_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  whatsappAccount   WhatsappAccount @relation(fields: [whatsappAccountId], references: [id], onDelete: Cascade)
+}
+
+model Conversation {
+  id                String            @id @default(uuid()) @db.Uuid
+  tenantId          String            @map("tenant_id") @db.Uuid
+  jivoChannelId     String            @map("jivo_channel_id") @db.Uuid
+  whatsappAccountId String?           @map("whatsapp_account_id") @db.Uuid
+  externalUserId    String            @map("external_user_id") @db.VarChar(255)
+  status            ConversationStatus @default(OPEN)
+  lastMessageAt     DateTime?         @map("last_message_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  jivoChannel       JivoChannel      @relation(fields: [jivoChannelId], references: [id], onDelete: Restrict)
+  whatsappAccount   WhatsappAccount? @relation(fields: [whatsappAccountId], references: [id], onDelete: SetNull)
+  messages          Message[]
+
+  @@index([tenantId, externalUserId])
+}
+
+model Message {
+  id              String             @id @default(uuid()) @db.Uuid
+  conversationId  String             @map("conversation_id") @db.Uuid
+  tenantId        String             @map("tenant_id") @db.Uuid
+  direction       MessageDirection
+  source          MessageSource
+  payloadType     MessagePayloadType @map("payload_type")
+  text            String?            @db.Text
+  payload         Json               @db.JsonB
+  correlationId   String?            @map("correlation_id") @db.Uuid
+  sentAt          DateTime           @map("sent_at")
+  deliveredAt     DateTime?          @map("delivered_at")
+  failedAt        DateTime?          @map("failed_at")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  conversation    Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  media           MessageMedia?
+  deliveryAttempts DeliveryAttempt[]
+  auditLogs       MessageAuditLog[]
+
+  @@index([tenantId, conversationId, sentAt])
+  @@index([correlationId])
+}
+
+model MessageMedia {
+  id          String   @id @default(uuid()) @db.Uuid
+  messageId   String   @map("message_id") @db.Uuid @unique
+  storageKey  String   @map("storage_key") @db.VarChar(512)
+  originalUrl String?  @map("original_url") @db.VarChar(2048)
+  mimeType    String   @map("mime_type") @db.VarChar(128)
+  sizeBytes   Int      @map("size_bytes")
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  message     Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+model DeliveryAttempt {
+  id          String          @id @default(uuid()) @db.Uuid
+  messageId   String          @map("message_id") @db.Uuid
+  tenantId    String          @map("tenant_id") @db.Uuid
+  channel     DeliveryChannel
+  status      DeliveryStatus
+  httpStatus  Int?            @map("http_status")
+  errorCode   String?         @map("error_code") @db.VarChar(128)
+  errorMessage String?        @map("error_message") @db.Text
+  attemptedAt DateTime        @map("attempted_at")
+
+  message     Message         @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, attemptedAt])
+}
+
+model MessageAuditLog {
+  id        String       @id @default(uuid()) @db.Uuid
+  messageId String       @map("message_id") @db.Uuid
+  tenantId  String       @map("tenant_id") @db.Uuid
+  direction MessageDirection
+  event     AuditEvent
+  metadata  Json         @db.JsonB
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  message   Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+}
+
+model JivoWebhookEvent {
+  id            String             @id @default(uuid()) @db.Uuid
+  tenantId      String             @map("tenant_id") @db.Uuid
+  jivoChannelId String             @map("jivo_channel_id") @db.Uuid
+  status        WebhookEventStatus @default(PENDING)
+  payload       Json               @db.JsonB
+  headers       Json               @db.JsonB
+  error         String?            @db.Text
+  createdAt     DateTime           @default(now()) @map("created_at")
+  processedAt   DateTime?          @map("processed_at")
+
+  tenant        Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  jivoChannel   JivoChannel        @relation("JivoChannelWebhookEvents", fields: [jivoChannelId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([status, createdAt])
+}
+model TenantWeeklyMetric {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  weekStart        DateTime @map("week_start")
+  messagesInbound  Int      @map("messages_inbound")
+  messagesOutbound Int      @map("messages_outbound")
+  errorsJivo       Int      @map("errors_jivo")
+  errorsWhatsapp   Int      @map("errors_whatsapp")
+  avgDeliveryMs    Int?     @map("avg_delivery_ms")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, weekStart], map: "tenant_week_unique")
+}
+
+model MaintenanceRunLog {
+  id         String          @id @default(uuid()) @db.Uuid
+  tenantId   String?         @map("tenant_id") @db.Uuid
+  jobName    String          @map("job_name") @db.VarChar(128)
+  status     DeliveryStatus  @default(SUCCESS)
+  startedAt  DateTime        @map("started_at")
+  finishedAt DateTime?       @map("finished_at")
+  message    String?         @db.Text
+
+  tenant     Tenant?         @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([jobName, startedAt])
+}
+
+
+
+
+

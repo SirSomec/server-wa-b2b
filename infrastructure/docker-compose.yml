@@ -1,0 +1,72 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: wa_b2b_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: server-wa-b2b
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: wa_b2b_rabbit
+    environment:
+      RABBITMQ_DEFAULT_USER: rabbitmq
+      RABBITMQ_DEFAULT_PASS: rabbitmq
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    container_name: wa_b2b_backend
+    depends_on:
+      - postgres
+      - rabbitmq
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/server-wa-b2b?schema=public
+      DATABASE_DIRECT_URL: postgresql://postgres:postgres@postgres:5432/server-wa-b2b?schema=public
+      PORT: 3000
+      JWT_SECRET: change-me
+      JWT_TTL: 1h
+    ports:
+      - '3000:3000'
+
+  wa_gateway:
+    build:
+      context: ..
+      dockerfile: connectors/wa-gateway/Dockerfile
+    container_name: wa_b2b_wa_gateway
+    depends_on:
+      - rabbitmq
+    environment:
+      NODE_ENV: production
+      AMQP_URL: amqp://rabbitmq:rabbitmq@rabbitmq:5672/
+      AMQP_QUEUE: wa-gateway-events
+      AMQP_PREFETCH: 10
+      LOG_LEVEL: info
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    container_name: wa_b2b_frontend
+    depends_on:
+      - backend
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://localhost:3000/api
+    ports:
+      - '3001:3001'
+
+volumes:
+  postgres_data:

@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "module": "CommonJS",
+    "baseUrl": "./",
+    "paths": {
+      "@server-wa-b2b/contracts": ["../../packages/contracts/src"],
+      "@server-wa-b2b/contracts/*": ["../../packages/contracts/src/*"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["dist", "node_modules"]
+}
