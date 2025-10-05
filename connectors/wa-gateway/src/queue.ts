@@ -1,5 +1,6 @@
 import { assertQueueEnvelope, QueueEnvelope } from '@server-wa-b2b/contracts';
 import amqp from 'amqplib';
+import type { ConsumeMessage } from 'amqplib';
 
 import { config } from './config';
 import { logger } from './logger';
@@ -50,7 +51,7 @@ export class QueueClient {
 
     await channel.consume(
       config.queueName,
-      async (msg) => {
+      async (msg: ConsumeMessage | null) => {
         if (!msg) {
           return;
         }
