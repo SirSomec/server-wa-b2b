@@ -12,29 +12,37 @@ export default function LoginPage() {
   return (
     <main className={styles.main}>
       <section className={styles.card}>
-        <h2>Sign in</h2>
-        <form>
-          <label htmlFor="email">Email</label>
+        <h2 className={styles.cardTitle}>Sign in</h2>
+        <form className={styles.form}>
+          <label className={styles.fieldLabel} htmlFor="email">
+            Email
+          </label>
           <input
+            className={styles.fieldInput}
             id="email"
             type="email"
             value={email}
             placeholder="admin@example.com"
             onChange={(event) => setEmail(event.target.value)}
           />
-          <label htmlFor="password">Password</label>
+          <label className={styles.fieldLabel} htmlFor="password">
+            Password
+          </label>
           <input
+            className={styles.fieldInput}
             id="password"
             type="password"
             value={password}
             placeholder="********"
             onChange={(event) => setPassword(event.target.value)}
           />
-          <button type="submit" disabled>
+          <button className={styles.submitButton} type="submit" disabled>
             Continue (coming soon)
           </button>
         </form>
-        <Link href="/">&larr; Back</Link>
+        <Link className={styles.backLink} href="/">
+          &larr; Back
+        </Link>
       </section>
     </main>
   );

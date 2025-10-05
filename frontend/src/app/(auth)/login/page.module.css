@@ -18,23 +18,23 @@
   gap: 1.25rem;
 }
 
-.card h2 {
+.cardTitle {
   text-align: center;
   margin: 0;
 }
 
-form {
+.form {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
 
-label {
+.fieldLabel {
   font-size: 0.875rem;
   color: #94a3b8;
 }
 
-input {
+.fieldInput {
   padding: 0.75rem 1rem;
   border-radius: 10px;
   border: 1px solid rgba(148, 163, 184, 0.25);
@@ -42,7 +42,7 @@ input {
   color: #e2e8f0;
 }
 
-button {
+.submitButton {
   margin-top: 0.5rem;
   padding: 0.75rem;
   border-radius: 10px;
@@ -53,11 +53,11 @@ button {
   cursor: not-allowed;
 }
 
-button:disabled {
+.submitButton:disabled {
   opacity: 0.7;
 }
 
-a {
+.backLink {
   color: #38bdf8;
   text-align: center;
 }
